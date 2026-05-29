@@ -20,7 +20,7 @@ cp .env.example .env
 | Variable | Description | Default (`.env.example`) |
 |----------|-------------|--------------------------|
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:postgres@localhost:5432/todo?schema=public` |
-| `JWT_SECRET` | Secret for signing access tokens | `change-me-in-production-use-long-random-string` |
+| `JWT_SECRET` | Secret for signing access tokens (min 32 chars, validated on startup) | `change-me-in-production-use-long-random-string` |
 | `JWT_EXPIRES_IN` | JWT lifetime (e.g. `7d`, `24h`) | `7d` |
 | `PORT` | HTTP port | `3000` |
 | `NODE_ENV` | `development` / `production` / `test` | `development` |

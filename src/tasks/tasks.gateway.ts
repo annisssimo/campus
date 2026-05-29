@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   OnGatewayConnection,
   OnGatewayDisconnect,
@@ -11,11 +12,9 @@ import {
 import { Task } from '@prisma/client';
 import { Server, Socket } from 'socket.io';
 import { JwtPayload } from '../auth/auth.service';
-import { parseCorsOrigins } from '../common/cors/cors.util';
+import { corsOriginDelegate } from '../common/cors/cors.util';
 
 const USER_ROOM_PREFIX = 'user:';
-
-const wsCorsOrigin = parseCorsOrigins(process.env.CORS_ORIGIN);
 
 export interface TaskPurgedPayload {
   id: string;
@@ -23,9 +22,10 @@ export interface TaskPurgedPayload {
   deletedAt: Date | null;
 }
 
+@SkipThrottle()
 @WebSocketGateway({
   namespace: '/tasks',
-  cors: { origin: wsCorsOrigin, credentials: true },
+  cors: { origin: corsOriginDelegate, credentials: true },
 })
 export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(TasksGateway.name);

@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_PIPE } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ZodValidationPipe } from 'nestjs-zod';
 import { DEFAULT_THROTTLE } from './common/throttler/throttler.constants';
+import { validateEnv } from './common/config/env.validation';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ArchiveModule } from './archive/archive.module';
@@ -13,7 +15,7 @@ import { TasksModule } from './tasks/tasks.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     ThrottlerModule.forRoot([DEFAULT_THROTTLE.default]),
     ScheduleModule.forRoot(),
     PrismaModule,
@@ -22,6 +24,10 @@ import { TasksModule } from './tasks/tasks.module';
     ArchiveModule,
   ],
   controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_PIPE, useClass: ZodValidationPipe },
+  ],
 })
 export class AppModule {}

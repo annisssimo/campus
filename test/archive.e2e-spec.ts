@@ -1,6 +1,5 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ZodValidationPipe } from 'nestjs-zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { ARCHIVE_RETENTION_DAYS } from '../src/archive/archive.constants';
@@ -19,7 +18,6 @@ describe('Archive purge (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ZodValidationPipe());
     await app.init();
 
     prisma = app.get(PrismaService);
