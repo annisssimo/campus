@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Task, TaskStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
+import { TasksGateway } from './tasks.gateway';
 import { TasksService } from './tasks.service';
 
 describe('TasksService', () => {
@@ -47,8 +48,19 @@ describe('TasksService', () => {
       },
     };
 
+    const tasksGateway = {
+      emitTaskCreated: vi.fn(),
+      emitTaskUpdated: vi.fn(),
+      emitTaskDeleted: vi.fn(),
+      emitTaskStatusChanged: vi.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [TasksService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        TasksService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: TasksGateway, useValue: tasksGateway },
+      ],
     }).compile();
 
     tasksService = module.get(TasksService);

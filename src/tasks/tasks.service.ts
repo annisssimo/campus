@@ -7,10 +7,14 @@ import { Prisma, Task } from '@prisma/client';
 import { PaginatedResponse } from '../common/dto/pagination-query.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskInput, TaskQuery, UpdateTaskInput } from './dto/task.dto';
+import { TasksGateway } from './tasks.gateway';
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tasksGateway: TasksGateway,
+  ) {}
 
   async findAll(
     userId: string,
@@ -48,8 +52,8 @@ export class TasksService {
     return this.findOwnedTask(userId, taskId);
   }
 
-  create(userId: string, dto: CreateTaskInput): Promise<Task> {
-    return this.prisma.task.create({
+  async create(userId: string, dto: CreateTaskInput): Promise<Task> {
+    const task = await this.prisma.task.create({
       data: {
         title: dto.title,
         description: dto.description,
@@ -57,6 +61,8 @@ export class TasksService {
         userId,
       },
     });
+    this.tasksGateway.emitTaskCreated(userId, task);
+    return task;
   }
 
   async update(
@@ -70,7 +76,8 @@ export class TasksService {
       throw new ForbiddenException('Cannot update archived task');
     }
 
-    return this.prisma.task.update({
+    const previousStatus = task.status;
+    const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
@@ -80,15 +87,24 @@ export class TasksService {
         ...(dto.status !== undefined ? { status: dto.status } : {}),
       },
     });
+
+    this.tasksGateway.emitTaskUpdated(userId, updated);
+    if (dto.status !== undefined && dto.status !== previousStatus) {
+      this.tasksGateway.emitTaskStatusChanged(userId, updated);
+    }
+
+    return updated;
   }
 
   async remove(userId: string, taskId: string): Promise<Task> {
     await this.findOwnedTask(userId, taskId);
 
-    return this.prisma.task.update({
+    const archived = await this.prisma.task.update({
       where: { id: taskId },
       data: { deletedAt: new Date() },
     });
+    this.tasksGateway.emitTaskDeleted(userId, archived);
+    return archived;
   }
 
   private async findOwnedTask(userId: string, taskId: string): Promise<Task> {
