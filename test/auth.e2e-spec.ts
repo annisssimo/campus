@@ -4,6 +4,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AuthResponseDto } from '../src/auth/dto/auth-response.dto';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -35,15 +36,17 @@ describe('Auth (e2e)', () => {
       .send({ email: 'auth@example.com', password: 'password123' })
       .expect(201);
 
-    expect(registerResponse.body.accessToken).toBeDefined();
-    expect(registerResponse.body.user.email).toBe('auth@example.com');
+    const registerBody = registerResponse.body as AuthResponseDto;
+    expect(registerBody.accessToken).toBeDefined();
+    expect(registerBody.user.email).toBe('auth@example.com');
 
     await request(app.getHttpServer())
       .post('/auth/login')
       .send({ email: 'auth@example.com', password: 'password123' })
       .expect(200)
       .expect(({ body }) => {
-        expect(body.accessToken).toBeDefined();
+        const loginBody = body as AuthResponseDto;
+        expect(loginBody.accessToken).toBeDefined();
       });
   });
 
