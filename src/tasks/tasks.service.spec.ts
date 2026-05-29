@@ -126,7 +126,11 @@ describe('TasksService', () => {
   });
 
   it('updates an active task owned by the user', async () => {
-    const updatedTask = { ...activeTask, title: 'Updated', status: TaskStatus.done };
+    const updatedTask = {
+      ...activeTask,
+      title: 'Updated',
+      status: TaskStatus.done,
+    };
     prisma.task.findFirst.mockResolvedValue(activeTask);
     prisma.task.update.mockResolvedValue(updatedTask);
 
