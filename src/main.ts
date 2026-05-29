@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { cleanupOpenApiDoc, ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module';
+import { parseCorsOrigins } from './common/cors/cors.util';
 import { SWAGGER_BEARER_AUTH } from './common/swagger/swagger.constants';
 
 async function bootstrap() {
@@ -13,6 +14,10 @@ async function bootstrap() {
   app.useGlobalPipes(new ZodValidationPipe());
 
   const configService = app.get(ConfigService);
+  app.enableCors({
+    origin: parseCorsOrigins(configService.get<string>('CORS_ORIGIN')),
+    credentials: true,
+  });
   const port = configService.get<number>('PORT', 3000);
 
   const swaggerConfig = new DocumentBuilder()

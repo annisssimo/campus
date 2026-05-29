@@ -97,7 +97,11 @@ export class TasksService {
   }
 
   async remove(userId: string, taskId: string): Promise<Task> {
-    await this.findOwnedTask(userId, taskId);
+    const task = await this.findOwnedTask(userId, taskId);
+
+    if (task.deletedAt !== null) {
+      return task;
+    }
 
     const archived = await this.prisma.task.update({
       where: { id: taskId },

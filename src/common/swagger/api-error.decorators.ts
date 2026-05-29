@@ -4,6 +4,7 @@ import {
   ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ErrorResponseDto } from './error-response.dto';
@@ -91,10 +92,27 @@ export function ApiConflictErrorResponse() {
   });
 }
 
+export function ApiThrottledErrorResponse() {
+  return ApiTooManyRequestsResponse({
+    description: 'Rate limit exceeded',
+    type: ErrorResponseDto,
+    content: {
+      'application/json': {
+        example: {
+          statusCode: 429,
+          message: 'ThrottlerException: Too Many Requests',
+          error: 'Too Many Requests',
+        },
+      },
+    },
+  });
+}
+
 export function ApiAuthErrorResponses() {
   return applyDecorators(
     ApiValidationErrorResponse(),
     ApiUnauthorizedErrorResponse(),
+    ApiThrottledErrorResponse(),
   );
 }
 
@@ -110,6 +128,8 @@ export function ApiTaskErrorResponses(options?: {
   if (options?.includeForbidden) {
     decorators.push(ApiForbiddenErrorResponse());
   }
+
+  decorators.push(ApiThrottledErrorResponse());
 
   return applyDecorators(...decorators);
 }

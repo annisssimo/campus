@@ -11,12 +11,21 @@ import {
 import { Task } from '@prisma/client';
 import { Server, Socket } from 'socket.io';
 import { JwtPayload } from '../auth/auth.service';
+import { parseCorsOrigins } from '../common/cors/cors.util';
 
 const USER_ROOM_PREFIX = 'user:';
 
+const wsCorsOrigin = parseCorsOrigins(process.env.CORS_ORIGIN);
+
+export interface TaskPurgedPayload {
+  id: string;
+  userId: string;
+  deletedAt: Date | null;
+}
+
 @WebSocketGateway({
   namespace: '/tasks',
-  cors: { origin: true, credentials: true },
+  cors: { origin: wsCorsOrigin, credentials: true },
 })
 export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(TasksGateway.name);
@@ -79,6 +88,10 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   emitTaskStatusChanged(userId: string, task: Task): void {
     this.server.to(this.userRoom(userId)).emit('task:statusChanged', task);
+  }
+
+  emitTaskPurged(userId: string, payload: TaskPurgedPayload): void {
+    this.server.to(this.userRoom(userId)).emit('task:purged', payload);
   }
 
   private userRoom(userId: string): string {

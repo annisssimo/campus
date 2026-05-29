@@ -8,6 +8,6 @@ import { TasksService } from './tasks.service';
   imports: [AuthModule],
   controllers: [TasksController],
   providers: [TasksService, TasksGateway],
-  exports: [TasksService],
+  exports: [TasksService, TasksGateway],
 })
 export class TasksModule {}

@@ -24,6 +24,7 @@ cp .env.example .env
 | `JWT_EXPIRES_IN` | JWT lifetime (e.g. `7d`, `24h`) | `7d` |
 | `PORT` | HTTP port | `3000` |
 | `NODE_ENV` | `development` / `production` / `test` | `development` |
+| `CORS_ORIGIN` | REST/WS allowed origins (`*` or comma-separated URLs) | `*` |
 
 In Docker Compose, `JWT_SECRET` and `JWT_EXPIRES_IN` can be overridden via host env or a `.env` file next to `docker-compose.yml`.
 
@@ -74,12 +75,13 @@ npm run test:cov
 
 | Area | Auth | Notes |
 |------|------|--------|
+| `GET /health` | Public | Liveness probe |
 | `POST /auth/register`, `POST /auth/login` | Public | Rate limit: 10 req/min |
 | `GET/POST/PATCH/DELETE /tasks` | Bearer JWT | Rate limit: 100 req/min |
 | `DELETE /tasks/:id` | Bearer JWT | Soft delete (`deletedAt`); archived tasks cannot be patched (403) |
 | WebSocket namespace `/tasks` | JWT in handshake | Events: `task:created`, `task:updated`, `task:deleted`, `task:statusChanged` |
 
-Archived tasks are hard-deleted by a daily cron after 7 days in the archive.
+Archived tasks are hard-deleted after **7 full days** in the archive (`deletedAt` ≤ now − 7 days). Purge runs **every hour** (UTC) and once on app startup. Until then, repeat `DELETE` on the same task is idempotent and does not reset `deletedAt`.
 
 ## curl examples
 
@@ -204,10 +206,11 @@ socket.on('task:created', (task) => console.log('created', task));
 socket.on('task:updated', (task) => console.log('updated', task));
 socket.on('task:statusChanged', (task) => console.log('status', task));
 socket.on('task:deleted', (task) => console.log('deleted', task));
+socket.on('task:purged', (payload) => console.log('purged', payload));
 socket.on('disconnect', () => console.log('disconnected'));
 ```
 
-Create or update a task via REST while this client is connected; events are emitted only to the owning user's room.
+Create or update a task via REST while this client is connected; events are emitted only to the owning user's room. After the 7-day retention window, the hourly purge emits `task:purged` with `{ id, userId, deletedAt }`.
 
 ## Project layout
 

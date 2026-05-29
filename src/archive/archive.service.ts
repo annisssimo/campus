@@ -1,31 +1,69 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { Task } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { TasksGateway } from '../tasks/tasks.gateway';
+import { ARCHIVE_CLEANUP_CRON } from './archive.constants';
+import { getArchiveRetentionCutoff } from './archive.utils';
 
-export const ARCHIVE_RETENTION_DAYS = 7;
+export { ARCHIVE_RETENTION_DAYS } from './archive.constants';
 
 @Injectable()
-export class ArchiveService {
+export class ArchiveService implements OnModuleInit {
   private readonly logger = new Logger(ArchiveService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tasksGateway: TasksGateway,
+  ) {}
 
-  @Cron('0 3 * * *')
-  async handleCleanupCron(): Promise<void> {
-    const deletedCount = await this.cleanupExpiredArchivedTasks();
-    this.logger.log(`Hard-deleted ${deletedCount} archived task(s)`);
+  onModuleInit(): void {
+    void this.runCleanup('startup');
   }
 
-  async cleanupExpiredArchivedTasks(): Promise<number> {
-    const cutoff = new Date();
-    cutoff.setUTCDate(cutoff.getUTCDate() - ARCHIVE_RETENTION_DAYS);
+  @Cron(ARCHIVE_CLEANUP_CRON)
+  async handleCleanupCron(): Promise<void> {
+    await this.runCleanup('cron');
+  }
 
-    const result = await this.prisma.task.deleteMany({
+  private async runCleanup(trigger: 'startup' | 'cron'): Promise<void> {
+    const deletedCount = await this.cleanupExpiredArchivedTasks();
+    if (deletedCount > 0) {
+      this.logger.log(
+        `Hard-deleted ${deletedCount} archived task(s) (trigger=${trigger})`,
+      );
+    }
+  }
+
+  async cleanupExpiredArchivedTasks(now: Date = new Date()): Promise<number> {
+    const cutoff = getArchiveRetentionCutoff(now);
+
+    const expired = await this.prisma.task.findMany({
       where: {
-        deletedAt: { lt: cutoff },
+        deletedAt: { lte: cutoff },
       },
     });
 
-    return result.count;
+    if (expired.length === 0) {
+      return 0;
+    }
+
+    await this.prisma.task.deleteMany({
+      where: { id: { in: expired.map((task) => task.id) } },
+    });
+
+    for (const task of expired) {
+      this.emitTaskPurged(task);
+    }
+
+    return expired.length;
+  }
+
+  private emitTaskPurged(task: Task): void {
+    this.tasksGateway.emitTaskPurged(task.userId, {
+      id: task.id,
+      userId: task.userId,
+      deletedAt: task.deletedAt,
+    });
   }
 }

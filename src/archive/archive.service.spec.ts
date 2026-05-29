@@ -1,55 +1,99 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TaskStatus } from '@prisma/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
-import { ARCHIVE_RETENTION_DAYS, ArchiveService } from './archive.service';
+import { TasksGateway } from '../tasks/tasks.gateway';
+import { ArchiveService } from './archive.service';
+import { getArchiveRetentionCutoff } from './archive.utils';
 
 describe('ArchiveService', () => {
   let archiveService: ArchiveService;
   let prisma: {
     task: {
+      findMany: ReturnType<typeof vi.fn>;
       deleteMany: ReturnType<typeof vi.fn>;
     };
+  };
+  let tasksGateway: {
+    emitTaskPurged: ReturnType<typeof vi.fn>;
+  };
+
+  const now = new Date('2026-05-29T12:00:00.000Z');
+  const expiredTask = {
+    id: 'task-1',
+    title: 'Expired',
+    description: null,
+    status: TaskStatus.todo,
+    userId: 'user-1',
+    deletedAt: new Date('2026-05-20T12:00:00.000Z'),
+    createdAt: new Date('2026-05-01T12:00:00.000Z'),
+    updatedAt: new Date('2026-05-20T12:00:00.000Z'),
   };
 
   beforeEach(async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-05-29T12:00:00.000Z'));
+    vi.setSystemTime(now);
 
     prisma = {
       task: {
+        findMany: vi.fn(),
         deleteMany: vi.fn(),
       },
     };
 
+    tasksGateway = {
+      emitTaskPurged: vi.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ArchiveService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        ArchiveService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: TasksGateway, useValue: tasksGateway },
+      ],
     }).compile();
 
     archiveService = module.get(ArchiveService);
   });
 
-  it('hard-deletes tasks archived before retention cutoff', async () => {
-    prisma.task.deleteMany.mockResolvedValue({ count: 3 });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
-    const deletedCount = await archiveService.cleanupExpiredArchivedTasks();
+  it('hard-deletes tasks at or past retention cutoff and emits purge events', async () => {
+    prisma.task.findMany.mockResolvedValue([expiredTask]);
+    prisma.task.deleteMany.mockResolvedValue({ count: 1 });
 
-    expect(deletedCount).toBe(3);
+    const deletedCount = await archiveService.cleanupExpiredArchivedTasks(now);
 
-    const cutoff = new Date('2026-05-29T12:00:00.000Z');
-    cutoff.setUTCDate(cutoff.getUTCDate() - ARCHIVE_RETENTION_DAYS);
+    expect(deletedCount).toBe(1);
 
-    expect(prisma.task.deleteMany).toHaveBeenCalledWith({
+    const cutoff = getArchiveRetentionCutoff(now);
+    expect(prisma.task.findMany).toHaveBeenCalledWith({
       where: {
-        deletedAt: { lt: cutoff },
+        deletedAt: { lte: cutoff },
       },
     });
+    expect(prisma.task.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [expiredTask.id] } },
+    });
+    expect(tasksGateway.emitTaskPurged).toHaveBeenCalledWith(
+      expiredTask.userId,
+      {
+        id: expiredTask.id,
+        userId: expiredTask.userId,
+        deletedAt: expiredTask.deletedAt,
+      },
+    );
   });
 
   it('returns zero when no tasks match cutoff', async () => {
-    prisma.task.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.task.findMany.mockResolvedValue([]);
 
-    const deletedCount = await archiveService.cleanupExpiredArchivedTasks();
+    const deletedCount = await archiveService.cleanupExpiredArchivedTasks(now);
 
     expect(deletedCount).toBe(0);
+    expect(prisma.task.deleteMany).not.toHaveBeenCalled();
+    expect(tasksGateway.emitTaskPurged).not.toHaveBeenCalled();
   });
 });

@@ -161,4 +161,13 @@ describe('TasksService', () => {
     expect(updateArgs.where).toEqual({ id: taskId });
     expect(updateArgs.data.deletedAt).toBeInstanceOf(Date);
   });
+
+  it('does not reset deletedAt when archiving an already archived task', async () => {
+    prisma.task.findFirst.mockResolvedValue(archivedTask);
+
+    const result = await tasksService.remove(userId, taskId);
+
+    expect(result).toEqual(archivedTask);
+    expect(prisma.task.update).not.toHaveBeenCalled();
+  });
 });

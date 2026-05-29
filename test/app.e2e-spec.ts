@@ -103,6 +103,14 @@ describe('Tasks flow (e2e)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ title: 'Should fail' })
       .expect(403);
+
+    const secondArchiveResponse = await request(app.getHttpServer())
+      .delete(`/tasks/${created.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    const secondArchive = secondArchiveResponse.body as TaskResponseDto;
+    expect(secondArchive.deletedAt).toBe(archived.deletedAt);
   });
 
   it('returns 404 when accessing another user task', async () => {
