@@ -51,6 +51,11 @@ describe('AuthService', () => {
       password: 'password123',
     });
 
+    expect(bcrypt.hash).toHaveBeenCalledWith('password123', 12);
+    expect(usersService.create).toHaveBeenCalledWith(
+      'user@example.com',
+      'hashed-password',
+    );
     expect(result.accessToken).toBe('jwt-token');
     expect(result.user.email).toBe('user@example.com');
   });
@@ -84,13 +89,25 @@ describe('AuthService', () => {
     expect(result.accessToken).toBe('jwt-token');
   });
 
-  it('throws UnauthorizedException for invalid credentials', async () => {
+  it('throws UnauthorizedException when user is not found', async () => {
     usersService.findByEmail.mockResolvedValue(null);
 
     await expect(
       authService.login({
         email: 'user@example.com',
         password: 'password123',
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('throws UnauthorizedException when password does not match', async () => {
+    usersService.findByEmail.mockResolvedValue(mockUser);
+    vi.mocked(bcrypt.compare).mockResolvedValue(false as never);
+
+    await expect(
+      authService.login({
+        email: 'user@example.com',
+        password: 'wrong-password',
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });

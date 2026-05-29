@@ -125,6 +125,23 @@ describe('TasksService', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('updates an active task owned by the user', async () => {
+    const updatedTask = { ...activeTask, title: 'Updated', status: TaskStatus.done };
+    prisma.task.findFirst.mockResolvedValue(activeTask);
+    prisma.task.update.mockResolvedValue(updatedTask);
+
+    const result = await tasksService.update(userId, taskId, {
+      title: 'Updated',
+      status: TaskStatus.done,
+    });
+
+    expect(result).toEqual(updatedTask);
+    expect(prisma.task.update).toHaveBeenCalledWith({
+      where: { id: taskId },
+      data: { title: 'Updated', status: TaskStatus.done },
+    });
+  });
+
   it('soft-deletes a task', async () => {
     prisma.task.findFirst.mockResolvedValue(activeTask);
     prisma.task.update.mockResolvedValue(archivedTask);
