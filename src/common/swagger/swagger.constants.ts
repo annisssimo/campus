@@ -1,0 +1,8 @@
+export const SWAGGER_BEARER_AUTH = 'JWT-auth';
+
+export const EXAMPLE_UUID = '550e8400-e29b-41d4-a716-446655440000';
+export const EXAMPLE_EMAIL = 'user@example.com';
+export const EXAMPLE_PASSWORD = 'password123';
+export const EXAMPLE_JWT =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MTcwMDYwNDgwMH0.example';
+export const EXAMPLE_ISO_DATE = '2026-01-15T10:30:00.000Z';
