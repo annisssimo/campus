@@ -1,98 +1,226 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Campus To-Do API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS backend for a mobile To-Do app: JWT auth, task CRUD with ownership, soft-delete archive (7-day retention cron), Swagger, rate limiting, and real-time task events over WebSockets.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Prerequisites
 
-## Description
+- **Node.js** 20+
+- **Docker** & Docker Compose (recommended), or local PostgreSQL 16+
+- **curl** and optionally **jq** for the examples below
+- **wscat** (optional) for WebSocket testing: `npm i -g wscat`
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Environment variables
 
-## Project setup
+Copy the example file and adjust secrets for production:
 
 ```bash
-$ npm install
+cp .env.example .env
 ```
 
-## Compile and run the project
+| Variable | Description | Default (`.env.example`) |
+|----------|-------------|--------------------------|
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:postgres@localhost:5432/todo?schema=public` |
+| `JWT_SECRET` | Secret for signing access tokens | `change-me-in-production-use-long-random-string` |
+| `JWT_EXPIRES_IN` | JWT lifetime (e.g. `7d`, `24h`) | `7d` |
+| `PORT` | HTTP port | `3000` |
+| `NODE_ENV` | `development` / `production` / `test` | `development` |
+
+In Docker Compose, `JWT_SECRET` and `JWT_EXPIRES_IN` can be overridden via host env or a `.env` file next to `docker-compose.yml`.
+
+## Run with Docker
+
+Build and start PostgreSQL + API (migrations run automatically on container start):
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+docker compose up --build
 ```
 
-## Run tests
+- API: `http://localhost:3000`
+- Swagger UI: [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
+
+## Local development
+
+1. Start PostgreSQL (only DB from Compose is enough):
+
+   ```bash
+   docker compose up postgres -d
+   ```
+
+2. Install dependencies and apply migrations:
+
+   ```bash
+   npm install
+   cp .env.example .env   # if not done yet
+   npm run prisma:migrate
+   ```
+
+3. Run the API in watch mode:
+
+   ```bash
+   npm run start:dev
+   ```
+
+Swagger: [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
+
+### Tests
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run test        # unit (Vitest)
+npm run test:e2e    # e2e (requires test DB / env — see test setup)
+npm run test:cov
 ```
 
-## Deployment
+## API overview
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Area | Auth | Notes |
+|------|------|--------|
+| `POST /auth/register`, `POST /auth/login` | Public | Rate limit: 10 req/min |
+| `GET/POST/PATCH/DELETE /tasks` | Bearer JWT | Rate limit: 100 req/min |
+| `DELETE /tasks/:id` | Bearer JWT | Soft delete (`deletedAt`); archived tasks cannot be patched (403) |
+| WebSocket namespace `/tasks` | JWT in handshake | Events: `task:created`, `task:updated`, `task:deleted`, `task:statusChanged` |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Archived tasks are hard-deleted by a daily cron after 7 days in the archive.
+
+## curl examples
+
+Base URL and sample credentials (match Swagger examples):
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+export BASE=http://localhost:3000
+export EMAIL=user@example.com
+export PASS=password123
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Register
 
-## Resources
+```bash
+curl -s -X POST "$BASE/auth/register" \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" | jq .
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+### Login (save token)
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+export TOKEN=$(curl -s -X POST "$BASE/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" | jq -r .accessToken)
 
-## Support
+echo "TOKEN=$TOKEN"
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Use `Authorization: Bearer $TOKEN` on all task routes below.
 
-## Stay in touch
+### Create task
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```bash
+TASK_RESP=$(curl -s -X POST "$BASE/tasks" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Buy groceries","description":"Milk, eggs","status":"todo"}')
+
+echo "$TASK_RESP" | jq .
+export TASK_ID=$(echo "$TASK_RESP" | jq -r .id)
+```
+
+### List tasks (filter + pagination)
+
+```bash
+# Active tasks, status filter, page 1
+curl -s "$BASE/tasks?status=todo&page=1&limit=20&archived=false" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+
+# Archived tasks
+curl -s "$BASE/tasks?archived=true&page=1&limit=20" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### Get one task
+
+```bash
+curl -s "$BASE/tasks/$TASK_ID" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### Update task
+
+```bash
+curl -s -X PATCH "$BASE/tasks/$TASK_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"in_progress","title":"Buy groceries (updated)"}' | jq .
+```
+
+### Archive task (soft delete)
+
+```bash
+curl -s -X DELETE "$BASE/tasks/$TASK_ID" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Patching an archived task returns **403 Forbidden**.
+
+## Swagger
+
+Interactive OpenAPI UI with Bearer auth:
+
+**[http://localhost:3000/api/docs](http://localhost:3000/api/docs)**
+
+1. Call `POST /auth/login` or `POST /auth/register` and copy `accessToken`.
+2. Click **Authorize**, enter `Bearer <token>` (or paste the token if the UI adds the prefix automatically).
+3. Try task endpoints from the **tasks** tag.
+
+WebSocket endpoints are not listed in Swagger; use the section below.
+
+## WebSocket (`/tasks`)
+
+- **Namespace:** `/tasks` (full URL: `http://localhost:3000/tasks` with Socket.IO client)
+- **Auth:** JWT via one of:
+  - `Authorization: Bearer <token>` header on handshake
+  - `auth: { token: '<jwt>' }` in client options
+  - Query: `?token=<jwt>`
+
+On connect, the server joins the socket to room `user:<userId>` and may emit `join` with `{ room: "user:<userId>" }`.
+
+### CLI note
+
+`wscat` speaks plain WebSockets; this gateway uses **Socket.IO** on namespace `/tasks`. Use the Node snippet below or any Socket.IO client (browser, mobile SDK).
+
+### Node.js client snippet
+
+```javascript
+import { io } from 'socket.io-client';
+
+const token = process.env.TOKEN; // from login curl above
+
+const socket = io('http://localhost:3000/tasks', {
+  auth: { token },
+  // alternative: extraHeaders: { Authorization: `Bearer ${token}` },
+});
+
+socket.on('connect', () => console.log('connected', socket.id));
+socket.on('join', (payload) => console.log('join', payload));
+socket.on('task:created', (task) => console.log('created', task));
+socket.on('task:updated', (task) => console.log('updated', task));
+socket.on('task:statusChanged', (task) => console.log('status', task));
+socket.on('task:deleted', (task) => console.log('deleted', task));
+socket.on('disconnect', () => console.log('disconnected'));
+```
+
+Create or update a task via REST while this client is connected; events are emitted only to the owning user's room.
+
+## Project layout
+
+```
+src/
+  auth/          # register, login, JWT
+  tasks/         # CRUD, gateway
+  archive/       # cron cleanup (>7 days archived)
+  common/        # guards, pagination, swagger helpers
+prisma/          # schema & migrations
+test/            # e2e specs
+```
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+UNLICENSED (private project).
