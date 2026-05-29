@@ -178,9 +178,9 @@ WebSocket endpoints are not listed in Swagger; use the section below.
 
 - **Namespace:** `/tasks` (full URL: `http://localhost:3000/tasks` with Socket.IO client)
 - **Auth:** JWT via one of:
-  - `Authorization: Bearer <token>` header on handshake
+  - `Authorization: Bearer <token>` header on handshake (recommended)
   - `auth: { token: '<jwt>' }` in client options
-  - Query: `?token=<jwt>`
+  - Query `?token=<jwt>` — **development/test only** (`NODE_ENV !== production`); disabled in production because tokens in URLs leak via logs and proxies
 
 On connect, the server joins the socket to room `user:<userId>` and may emit `join` with `{ room: "user:<userId>" }`.
 

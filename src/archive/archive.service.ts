@@ -1,6 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { Task } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksGateway } from '../tasks/tasks.gateway';
 import { ARCHIVE_CLEANUP_CRON } from './archive.constants';
@@ -17,8 +16,8 @@ export class ArchiveService implements OnModuleInit {
     private readonly tasksGateway: TasksGateway,
   ) {}
 
-  onModuleInit(): void {
-    void this.runCleanup('startup');
+  async onModuleInit(): Promise<void> {
+    await this.runCleanup('startup');
   }
 
   @Cron(ARCHIVE_CLEANUP_CRON)
@@ -27,11 +26,15 @@ export class ArchiveService implements OnModuleInit {
   }
 
   private async runCleanup(trigger: 'startup' | 'cron'): Promise<void> {
-    const deletedCount = await this.cleanupExpiredArchivedTasks();
-    if (deletedCount > 0) {
-      this.logger.log(
-        `Hard-deleted ${deletedCount} archived task(s) (trigger=${trigger})`,
-      );
+    try {
+      const deletedCount = await this.cleanupExpiredArchivedTasks();
+      if (deletedCount > 0) {
+        this.logger.log(
+          `Hard-deleted ${deletedCount} archived task(s) (trigger=${trigger})`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(`Archive cleanup failed (trigger=${trigger})`, error);
     }
   }
 
@@ -39,9 +42,8 @@ export class ArchiveService implements OnModuleInit {
     const cutoff = getArchiveRetentionCutoff(now);
 
     const expired = await this.prisma.task.findMany({
-      where: {
-        deletedAt: { lte: cutoff },
-      },
+      where: { deletedAt: { lte: cutoff } },
+      select: { id: true, userId: true, deletedAt: true },
     });
 
     if (expired.length === 0) {
@@ -53,17 +55,9 @@ export class ArchiveService implements OnModuleInit {
     });
 
     for (const task of expired) {
-      this.emitTaskPurged(task);
+      this.tasksGateway.emitTaskPurged(task.userId, task);
     }
 
     return expired.length;
-  }
-
-  private emitTaskPurged(task: Task): void {
-    this.tasksGateway.emitTaskPurged(task.userId, {
-      id: task.id,
-      userId: task.userId,
-      deletedAt: task.deletedAt,
-    });
   }
 }

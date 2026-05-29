@@ -37,6 +37,7 @@
     "@nestjs/websockets": "^11.1.24",
     "@prisma/client": "^6.19.3",
     "bcrypt": "^6.0.0",
+    "helmet": "^8.2.0",
     "nestjs-zod": "^5.4.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

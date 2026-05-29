@@ -56,6 +56,10 @@ describe('Tasks flow (e2e)', () => {
     return { token: accessToken, userId: user.id };
   }
 
+  it('returns 401 when accessing tasks without token', async () => {
+    await request(app.getHttpServer()).get('/tasks').expect(401);
+  });
+
   it('register → login → CRUD → archive blocks update', async () => {
     const { token } = await registerAndLogin('flow@example.com');
 

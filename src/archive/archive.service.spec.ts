@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TaskStatus } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksGateway } from '../tasks/tasks.gateway';
@@ -21,13 +20,8 @@ describe('ArchiveService', () => {
   const now = new Date('2026-05-29T12:00:00.000Z');
   const expiredTask = {
     id: 'task-1',
-    title: 'Expired',
-    description: null,
-    status: TaskStatus.todo,
     userId: 'user-1',
     deletedAt: new Date('2026-05-20T12:00:00.000Z'),
-    createdAt: new Date('2026-05-01T12:00:00.000Z'),
-    updatedAt: new Date('2026-05-20T12:00:00.000Z'),
   };
 
   beforeEach(async () => {
@@ -70,9 +64,8 @@ describe('ArchiveService', () => {
 
     const cutoff = getArchiveRetentionCutoff(now);
     expect(prisma.task.findMany).toHaveBeenCalledWith({
-      where: {
-        deletedAt: { lte: cutoff },
-      },
+      where: { deletedAt: { lte: cutoff } },
+      select: { id: true, userId: true, deletedAt: true },
     });
     expect(prisma.task.deleteMany).toHaveBeenCalledWith({
       where: { id: { in: [expiredTask.id] } },

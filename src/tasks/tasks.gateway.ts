@@ -109,12 +109,14 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return authToken;
     }
 
-    const queryToken = client.handshake.query.token;
-    if (typeof queryToken === 'string') {
-      return queryToken;
-    }
-    if (Array.isArray(queryToken) && queryToken[0]) {
-      return queryToken[0];
+    if (this.configService.get<string>('NODE_ENV') !== 'production') {
+      const queryToken = client.handshake.query.token;
+      if (typeof queryToken === 'string') {
+        return queryToken;
+      }
+      if (Array.isArray(queryToken) && queryToken[0]) {
+        return queryToken[0];
+      }
     }
 
     return null;

@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
 import { parseCorsOrigins } from './common/cors/cors.util';
@@ -9,6 +10,7 @@ import { SWAGGER_BEARER_AUTH } from './common/swagger/swagger.constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(helmet());
   app.useWebSocketAdapter(new IoAdapter(app));
   app.enableShutdownHooks();
 
